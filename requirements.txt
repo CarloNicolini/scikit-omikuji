@@ -1,0 +1,9 @@
+# external requirements
+click
+python-dotenv>=0.5.1
+omikuji
+scikit-learn
+pandas
+scipy
+# local package
+-e .
