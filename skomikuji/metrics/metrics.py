@@ -1,8 +1,6 @@
 import numpy as np
-from scipy.sparse import csr_matrix
-from numba import jit, njit
-from typing import Dict, List, Any 
-
+from typing import Dict, Optional, Tuple
+from functools import partial
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -13,70 +11,168 @@ from sklearn.metrics import (
     recall_score,
     zero_one_loss,
     log_loss,
-    make_scorer,
-    multilabel_confusion_matrix,
 )
-
-def precision_at_k(Y_true: np.ndarray, Y_pred: np.ndarray, K: int) -> np.ndarray:
-    """
-    How many relevant items are present in the top-k recommendations of your system
-    """
-    @jit(nopython=True)
-    def helper(score_mat: np.ndarray, true_mat: np.ndarray) -> np.ndarray:
-        num_inst = score_mat.shape[1]
-        num_lbl = score_mat.shape[0]
-
-        P = np.zeros(K)
-        rank_mat = np.argsort(-score_mat, axis=0) + 1  # Sort scores in descending order
-
-        for k in range(1, K + 1):
-            mat = rank_mat.copy()
-            mat[mat > k] = 0
-            mat = np.where(mat > 0, 1, 0)
-            mat = mat * true_mat
-            num = np.sum(mat, axis=1)
-
-            P[k - 1] = np.mean(num / k)
-
-        return P
-
-    return helper(Y_pred, Y_true)
+from sklearn.metrics import ndcg_score
 
 
-@njit
-def ndcg_k(Y_true: np.ndarray, Y_pred: np.ndarray, K: int) -> np.ndarray:
-    num_instances = Y_true.shape[0]
-    num_labels = Y_true.shape[1]
+# def inv_propensity(X_Y: np.ndarray, a_coeff: float = 0.5, b_coeff: float = 0.4):
+#     """
+#     function wts = inv_propensity(X_Y,A,B,varargin)
 
-    # Calculate weights
-    weights = 1 / np.log2(np.arange(num_labels) + 2)
-    cumulative_weights = np.cumsum(weights)
+#         %% Returns inverse propensity weights
+#         %% A,B are parameters of the propensity model. Refer to paper for more details.
+#         %% A,B values used for different datasets in paper:
+#         %%	Wikipedia-LSHTC: A=0.5,  B=0.4
+#         %%	Amazon:          A=0.6,  B=2.6
+#         %%	Other:			 A=0.55, B=1.5
 
-    # Sort predicted scores and true labels
-    sorted_indices = np.argsort(-Y_pred, axis=1)
-    sorted_scores = -np.sort(-Y_pred, axis=1)
-    sorted_true_labels = np.take_along_axis(Y_true, sorted_indices, axis=1)
+#         num_inst = size(z,2);
+#         freqs = sum(z,2);
 
-    ndcg_values = np.zeros(K)
-
-    for k in range(1, K + 1):
-        discounted_gain = 1 / np.log2(sorted_indices[:, :k] + 2)
-        cumulative_discounted_gain = np.cumsum(discounted_gain, axis=1)
-        cumulative_discounted_gain = np.pad(
-            cumulative_discounted_gain, ((0, 0), (0, K - k)), mode="edge"
-        )
-
-        relevant_count = np.minimum(np.sum(sorted_true_labels[:, :k], axis=1), k)
-        denominator = cumulative_weights[relevant_count - 1]
-
-        ndcg_values[k - 1] = np.mean(
-            np.sum(cumulative_discounted_gain / denominator[:, np.newaxis], axis=0)
-        )
-
-    return ndcg_values
+#         C = (log(num_inst)-1)*(B+1)^A;
+#         wts = 1 + C*(freqs+B).^-A;
+#     end
+#     """
+#     n_cols = X_Y.shape[1]
+#     freqs = np.sum(X_Y, axis=1)
+#     C = (np.log(n_cols) - 1) * (b_coeff + 1) ** a_coeff
+#     return np.power(1 + C * (freqs + b_coeff), -a_coeff)
 
 
-def compute_metrics(y_true, y_pred, sample_weight=None) -> Dict[str, float]:
+# def precision_at_k(
+#     y_true: np.ndarray,
+#     y_score: np.ndarray,
+#     k: int = 3,
+#     propensity_array: Optional[np.ndarray] = None,
+#     propensity_coeff: Optional[Tuple[float, float]] = None,
+# ) -> float:
+#     """
+#     Returns the precision@k of an array.
+
+#     Parameters
+#     ----------
+#     x: np.array
+#         The array.
+#     k: int
+#         The number of indices to return.
+
+#     Returns
+#     -------
+#     np.array
+#         The top k indices.
+#     """
+#     y_true_ranked = np.take_along_axis(
+#         arr=y_true, indices=np.argsort(y_score, axis=1)[:, ::-1], axis=1
+#     )
+#     if isinstance(propensity_coeff, (tuple,list)):
+#         propensity_array = inv_propensity(y_true, *propensity_coeff)
+#     if propensity_array is None:
+#         return y_true_ranked[:, :k].mean()
+#     elif isinstance(propensity_array, np.ndarray):
+#         y_true_ranked = y_true_ranked / propensity_array
+#     else:
+#         raise TypeError("Propensity scores must either be None or a numpy array")
+
+
+# def dcg_at_k(
+#     y_true: np.ndarray,
+#     y_score: np.ndarray,
+#     k: int = 3,
+#     log_base: int | float = 2,
+#     normalized: bool = False,
+# ) -> float:
+#     """
+#     Returns the discounted cumulative gain@k of an array.
+
+#     Parameters
+#     ----------
+#     x: np.array
+#         The array.
+#     k: int
+#         The number of indices to return.
+
+#     Returns
+#     -------
+#     np.array
+#         The top k indices.
+#     """
+#     indices = np.argsort(y_score, axis=1)[:, ::-1]
+#     logs = np.log(indices + 2) / np.log(log_base)
+#     y_true_ranked = np.take_along_axis(arr=y_true, indices=indices, axis=1)
+#     dcg = (y_true_ranked / logs)[:, :k].sum() / k
+#     if not normalized:
+#         return dcg
+#     else:
+#         y_true_l0 = np.sum(y_true, axis=1)
+#         y_true_l0 = np.tile(y_true_l0, y_true.shape[0]).reshape(y_true.shape)
+#         denominator = np.take_along_axis(arr=np.power(logs, -1), indices=np.min(axis=1))
+#         ndcg = dcg / denominator
+#         return ndcg
+
+
+# def top_k(x, k: int):
+#     """
+#     Returns the top k indices of an array.
+
+#     Parameters
+#     ----------
+#     x: np.array
+#         The array.
+#     k: int
+#         The number of indices to return.
+
+#     Returns
+#     -------
+#     np.array
+#         The top k indices.
+#     """
+#     ind = np.argpartition(x, -k)[-k:]
+#     ind = ind[np.argsort(x[ind])]
+#     ind.sort()
+#     return ind
+#
+# def apk(y_true, y_pred, k=10):
+#     """
+#     Computes the average precision at k.
+
+#     This function computes the average prescision at k between two lists of
+#     items.
+
+#     Parameters
+#     ----------
+#     actual : list
+#              A list of elements that are to be predicted (order doesn't matter)
+#     predicted : list
+#                 A list of predicted elements (order does matter)
+#     k : int, optional
+#         The maximum number of predicted elements
+
+#     Returns
+#     -------
+#     score : double
+#             The average precision at k over the input lists
+
+#     """
+#     if len(y_pred) > k:
+#         y_pred = y_pred[:k]
+
+#     score = 0.0
+#     num_hits = 0.0
+
+#     for i, p in enumerate(y_pred):
+#         if p in y_true and p not in y_pred[:i]:
+#             num_hits += 1.0
+#             score += num_hits / (i + 1.0)
+
+#     if not y_true:
+#         return 0.0
+
+#     return score / min(len(y_true), k)
+
+
+def compute_metrics(
+    y_true, y_pred, y_score=None, sample_weight=None
+) -> Dict[str, float]:
     """
     Computes the metrics for the model evaluation.
 
@@ -92,7 +188,7 @@ def compute_metrics(y_true, y_pred, sample_weight=None) -> Dict[str, float]:
     Dict
         A dictionary containing the metrics.
     """
-    return {
+    all_metrics = {
         "precision_weighted": precision_score(
             y_true=y_true,
             y_pred=y_pred,
@@ -158,72 +254,12 @@ def compute_metrics(y_true, y_pred, sample_weight=None) -> Dict[str, float]:
             zero_division=0.0,
             sample_weight=sample_weight,
         ),
-        "log_loss": log_loss(y_true=y_true, y_pred=y_pred, sample_weight=sample_weight),
-        "support": len(y_pred),
     }
 
+    if y_score is not None:
+        all_metrics["ncdg_score"] = ndcg_score(y_true=y_true, y_score=y_score)
+    all_metrics["log_loss"] = log_loss(y_true=y_true, y_pred=y_pred, sample_weight=sample_weight)
+    all_metrics["support"] = len(y_pred)
+    
+    return all_metrics
 
-def apk(y_true, y_pred, k=10):
-    """
-    Computes the average precision at k.
-
-    This function computes the average prescision at k between two lists of
-    items.
-
-    Parameters
-    ----------
-    actual : list
-             A list of elements that are to be predicted (order doesn't matter)
-    predicted : list
-                A list of predicted elements (order does matter)
-    k : int, optional
-        The maximum number of predicted elements
-
-    Returns
-    -------
-    score : double
-            The average precision at k over the input lists
-
-    """
-    if len(y_pred) > k:
-        y_pred = y_pred[:k]
-
-    score = 0.0
-    num_hits = 0.0
-
-    for i, p in enumerate(y_pred):
-        if p in y_true and p not in y_pred[:i]:
-            num_hits += 1.0
-            score += num_hits / (i + 1.0)
-
-    if not y_true:
-        return 0.0
-
-    return score / min(len(y_true), k)
-
-
-def mapk(y_true, y_pred, k=10):
-    """
-    Computes the mean average precision at k.
-
-    This function computes the mean average prescision at k between two lists
-    of lists of items.
-
-    Parameters
-    ----------
-    actual : list
-             A list of lists of elements that are to be predicted
-             (order doesn't matter in the lists)
-    predicted : list
-                A list of lists of predicted elements
-                (order matters in the lists)
-    k : int, optional
-        The maximum number of predicted elements
-
-    Returns
-    -------
-    score : double
-            The mean average precision at k over the input lists
-
-    """
-    return np.mean([apk(a, p, k) for a, p in zip(y_true, y_pred)])

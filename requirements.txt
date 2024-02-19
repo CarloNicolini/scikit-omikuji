@@ -5,5 +5,8 @@ omikuji
 scikit-learn
 pandas
 scipy
+tabulate
+cython
+git+https://github.com/kunaldahiya/pyxclib.git
 # local package
 -e .

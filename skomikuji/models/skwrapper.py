@@ -1,68 +1,18 @@
+import contextlib
 import logging
-from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Dict
+from typing import Optional
 
 import numpy as np
 import omikuji as omi
-from numba import njit
 from numpy.typing import ArrayLike
-from scipy.sparse import csr_array, vstack
+from scipy.sparse import csr_array
 from sklearn.base import BaseEstimator
 from sklearn.datasets import dump_svmlight_file
-from sklearn.datasets import load_svmlight_file as load_svmlight_file_sklearn
-from sklearn.metrics import multilabel_confusion_matrix
-from tabulate import tabulate
 
-from skomikuji.data.parsers.svmlight import load_svm_light
-from skomikuji.metrics import compute_metrics
-
-from skomikuji.data.parsers.xc import read_xc_repo_file
+from skomikuji.data.parsers.svmlight import line_prepender
 
 logger = logging.getLogger()
-
-
-def line_prepender(filename, line):
-    with open(filename, "r+") as f:
-        content = f.read()
-        f.seek(0, 0)
-        f.write(line.rstrip("\r\n") + "\n" + content)
-
-
-def load_svm_light_file_patch(path):
-    i = 0
-    x_row, x_cols, x_values = [], [], []
-    Y = []
-    for line in Path(path).read_text().split("\n"):
-        if i == 0:
-            n_samples, n_features, n_labels = [int(i) for i in line.split()]
-            i += 1
-            continue
-        if line:
-            y, *x = line.split(" ")
-            if ":" in y:  # it's because the label was missing!
-                continue
-            try:
-                y = [int(i) for i in y.split(",")]
-            except Exception:
-                # print(f"Error at line {i}")
-                continue
-            Y.append(y)
-            for r in x:
-                feat, val = r.split(":")
-                feat = int(feat)
-                val = float(val)
-                x_row.append(i - 1)
-                x_cols.append(feat)
-                x_values.append(val)
-            i += 1
-
-    X = csr_array((x_values, (x_row, x_cols)), shape=(i-1, n_features))
-    rowcols = [(row, col) for row, labels in enumerate(Y) for col in labels]
-    rows = [r[0] for r in rowcols]
-    cols = [r[1] for r in rowcols]
-    Y = csr_array((len(rows) * [1], (rows, cols)), shape=(i, n_labels))
-    return X, Y
 
 
 class OmikujiEstimator(BaseEstimator):
@@ -75,9 +25,10 @@ class OmikujiEstimator(BaseEstimator):
     ----------
     Parabel has 4 hyperparameters:
         (a) the number of trees (T );
-        (b) the maximum number of paths that can be traversed in a tree (P); (c) the maximum number of labels in a leaf node (M) and
-        (d) the misclassification penalty for all the internal and
-        leaf node classifiers (C).
+        (b) the maximum number of paths that can be traversed in a tree (P); 
+        (c) the maximum number of labels in a leaf node (M);
+        (d) the misclassification penalty for all the internal and leaf node classifiers (C)
+        .
         The default parameter settings of M = 100, P = 10 and C = 10 (C = 1) for log loss (squared hinge loss) were used in all the experiments to eliminate hyperparameter sweeps (though tuning could have increased Parabel's accuracy).
 
     """
@@ -99,9 +50,11 @@ class OmikujiEstimator(BaseEstimator):
         cluster_balanced: bool = False,
         cluster_eps: float = 0.0001,
         cluster_min_size: int = 2,
+        n_jobs: Optional[int] = None
     ) -> None:
-        self.beam_size = beam_size
         self.top_k = top_k
+        self.beam_size = beam_size
+        self.n_trees = n_trees
         self.min_branch_size = min_branch_size
         self.max_depth = max_depth
         self.centroid_threshold = centroid_threshold
@@ -114,10 +67,11 @@ class OmikujiEstimator(BaseEstimator):
         self.cluster_balanced = cluster_balanced
         self.cluster_eps = cluster_eps
         self.cluster_min_size = cluster_min_size
+        self.n_jobs = n_jobs
 
     @staticmethod
-    def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param):
-        with NamedTemporaryFile(delete=False, mode="w", prefix="omikuji-") as tmp_file:
+    def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param, n_jobs=None):
+        with NamedTemporaryFile(delete=True, mode="w", prefix="omikuji-") as tmp_file:
             dump_svmlight_file(
                 X=X, y=Y, f=tmp_file.name, multilabel=True, zero_based=True
             )
@@ -125,17 +79,17 @@ class OmikujiEstimator(BaseEstimator):
                 tmp_file.name,
                 f"{X.shape[0]} {X.shape[1]} {Y.shape[1]}\n",
             )
-            return omi.Model.train_on_data(tmp_file.name, hyper_param)
+            return omi.Model.train_on_data(tmp_file.name, hyper_param, n_threads=n_jobs)
 
     def validate_features(self, X: ArrayLike | csr_array):
-        assert isinstance(X, (np.ndarray,csr_array)),"Only ndarray or csr_matrix accepted"
+        assert isinstance(X, (np.ndarray,csr_array)),"Only ndarray or csr_array accepted"
         S = X.sum(axis=1) != 0
         assert S.all(), "Some examples have no nonzero features"
 
     def validate_labels(self, Y: ArrayLike | csr_array):
         assert isinstance(
             Y, (np.ndarray, csr_array)
-        ), "Only ndarray or csr_matrix accepted"
+        ), "Only ndarray or csr_array accepted"
         S = Y.sum(axis=1) != 0
         assert S.all(), "Some examples have no label"
 
@@ -178,7 +132,7 @@ class OmikujiEstimator(BaseEstimator):
             Y, (np.ndarray, csr_array)
         ):
             self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_dense_arrays(
-                X, Y, hyper_param=hyper_param
+                X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
             )
         return self
 
@@ -217,48 +171,3 @@ class OmikujiEstimator(BaseEstimator):
         self, X: ArrayLike | csr_array, proba_threshold: float = 0.5
     ) -> csr_array:
         return (self.predict_proba(X) > 0.5).astype(int)
-
-
-def load_train_test_data_svm(
-    train_data_path: str, test_data_path: str
-) -> Dict[str, csr_array]:
-    num_samples_train, num_features_train, num_labels_train = [
-        int(x) for x in open(train_data_path, "r").readline().split()
-    ]
-    num_samples_test, num_features_test, num_labels_test = [
-        int(x) for x in open(train_data_path, "r").readline().split()
-    ]
-    assert (
-        num_features_test == num_features_train
-    ), "Incompatible number of features between train and test"
-    assert (
-        num_labels_test == num_labels_train
-    ), "Incompatible number of labels between train and test"
-    
-    X_train, Y_train = load_svm_light_file_patch(train_data_path)
-    X_test, Y_test = load_svm_light_file_patch(test_data_path)
-    return {"X_train": X_train, "Y_train": Y_train, "X_test": X_test, "Y_test": Y_test}
-
-
-if __name__ == "__main__":
-    model = OmikujiEstimator(top_k=5)
-    
-    data = load_train_test_data_svm(
-        "/home/ubuntu/workspace/skomikuji/data/eurlex/eurlex_train.txt",
-        "/home/ubuntu/workspace/skomikuji/data/eurlex/eurlex_test.txt",
-    )
-    print(data)
-    
-    """ data = {}
-    data["X_train"] = csr_array(np.random.randn(10, 3) * (np.random.randn(10, 3) > -1.0))
-    data["Y_train"] = csr_array(np.random.randn(10, 3) > -1.0)
-    print(data["Y_train"].shape)
-    data["X_test"] = csr_array(np.random.randn(5, 3) * (np.random.randn(5, 3) > -1.0))
-    data["Y_test"] = csr_array(np.random.randn(5, 3) > -1.0) """
-    model = model.fit(data["X_train"], data["Y_train"])
-
-    Y_proba_test_pred = model.predict_proba(data["X_test"]).todense()
-    Y_test_pred = Y_proba_test_pred > 0.5
-
-    print(compute_metrics(data["Y_test"], Y_test_pred))
-    print(multilabel_confusion_matrix(data["Y_test"], Y_test_pred))
