@@ -71,6 +71,12 @@ class OmikujiEstimator(BaseEstimator):
 
     @staticmethod
     def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param, n_jobs=None):
+        """
+        Temporarily dump the arrays to disk in XC repo format and load them 
+        using the Rust function train_on_data
+        Parameters
+        ----------
+        """
         with NamedTemporaryFile(delete=True, mode="w", prefix="omikuji-") as tmp_file:
             dump_svmlight_file(
                 X=X, y=Y, f=tmp_file.name, multilabel=True, zero_based=True
@@ -80,6 +86,15 @@ class OmikujiEstimator(BaseEstimator):
                 f"{X.shape[0]} {X.shape[1]} {Y.shape[1]}\n",
             )
             return omi.Model.train_on_data(tmp_file.name, hyper_param, n_threads=n_jobs)
+        
+    @staticmethod
+    def _train_omikuji_from_X_Y_sparse_arrays(X: csr_array, Y: csr_array, hyper_param=None, n_jobs=None):
+        """
+        Pass the sparse arrays directly to underlying Rust implementation
+        Parameters
+        ----------
+        """
+        return omi.Model.train_on_features_labels(features=X, labels=Y, hyper_param=hyper_param, n_threads=n_jobs)
 
     def validate_features(self, X: ArrayLike | csr_array):
         assert isinstance(X, (np.ndarray,csr_array)),"Only ndarray or csr_array accepted"
@@ -114,6 +129,7 @@ class OmikujiEstimator(BaseEstimator):
         self.validate_labels(Y)
         hyper_param = omi.Model.default_hyper_param()
         # applies the hyperparameters
+        hyper_param.n_trees = self.n_trees
         hyper_param.min_branch_size = self.min_branch_size
         hyper_param.max_depth = self.max_depth
         hyper_param.centroid_threshold = self.centroid_threshold
@@ -131,7 +147,7 @@ class OmikujiEstimator(BaseEstimator):
         if isinstance(X, (np.ndarray, csr_array)) and isinstance(
             Y, (np.ndarray, csr_array)
         ):
-            self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_dense_arrays(
+            self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_sparse_arrays(
                 X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
             )
         return self
