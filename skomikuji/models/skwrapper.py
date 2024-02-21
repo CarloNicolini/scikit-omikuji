@@ -153,6 +153,9 @@ class OmikujiEstimator(BaseEstimator):
         )
 
     def validate_features(self, X: ArrayLike | csr_array | csr_matrix):
+        """
+        Check that the features are in the right format and data type
+        """
         if not isinstance(X, (np.ndarray, csr_array, csr_matrix)):
             raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
         if X.dtype != np.float32:
@@ -164,6 +167,11 @@ class OmikujiEstimator(BaseEstimator):
             raise ValueError("Some examples have no nonzero features")
 
     def validate_labels(self, Y: ArrayLike | csr_array | csr_matrix):
+        """
+        Check that the labels are in the right format and data type.
+        Also checks for samples with no label and raises ValueError.
+        User has to discard them.
+        """
         if not isinstance(Y, (np.ndarray, csr_array, csr_matrix)):
             raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
         if Y.dtype != np.uint32:

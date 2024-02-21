@@ -7,88 +7,6 @@ Moreover we offer a scikit-learn compatible wrapper around the modified Omikuji 
 Omikuji is an efficient implementation of **PARABEL** (Partitioned Label Trees) by Prabhu et al., 2018 and its variations for extreme multi-label classification.
 The underlying model code is written in Rust🦀 and its original version is offered by [Tom Tung](https://github.com/tomtung/omikuji).
 
-## Features & Performance
-
-Omikuji has has been tested on datasets from the [Extreme Classification Repository](http://manikvarma.org/downloads/XC/XMLRepository.html). All tests below are run on a quad-core Intel® Core™ i7-6700 CPU, and we allowed as many cores to be utilized as possible. We measured training time, and calculated precisions at 1, 3, and 5. (Note that, due to randomness, results might vary from run to run, especially for smaller datasets.)
-
-### Parabel, better parallelized
-
-Omikuji provides a more parallelized implementation of Parabel (Prabhu et al., 2018) that trains faster when more CPU cores are available. Compared to the [original implementation](http://manikvarma.org/code/Parabel/download.html) written in C++, which can only utilize the same number of CPU cores as the number of trees (3 by default), Omikuji maintains the same level of precision but trains 1.3x to 1.7x faster on our quad-core machine. **Further speed-up is possible if more CPU cores are available**.
-
-| Dataset               | Metric        | Parabel       | Omikuji<br/>(balanced,<br/>cluster.k=2)       |
-|-----------------      |------------   |---------      |------------------------------------------     |
-|  EURLex-4K            | P@1           | 82.2          | 82.1                                          |
-|                       | P@3           | 68.8          | 68.8                                          |
-|                       | P@5           | 57.6          | 57.7                                          |
-|                       | Train Time    | 18s           | 14s                                           |
-| Amazon-670K           | P@1           | 44.9          | 44.8                                          |
-|                       | P@3           | 39.8          | 39.8                                          |
-|                       | P@5           | 36.0          | 36.0                                          |
-|                       | Train Time    | 404s          | 234s                                          |
-|  WikiLSHTC-325K       | P@1           | 65.0          | 64.8                                          |
-|                       | P@3           | 43.2          | 43.1                                          |
-|                       | P@5           | 32.0          | 32.1                                          |
-|                       | Train Time    | 959s          | 659s                                          |
-
-### Regular k-means for shallow trees
-
-Following Bonsai (Khandagale et al., 2019), Omikuji supports using regular k-means instead of balanced 2-means clustering for tree construction, which results in wider, shallower and unbalanced trees that train slower but have better precision. Comparing to the [original Bonsai implementation](https://github.com/xmc-aalto/bonsai), Omikuji also achieves the same precisions while training 2.6x to 4.6x faster on our quad-core machine. (Similarly, further speed-up is possible if more CPU cores are available.)
-
-| Dataset               | Metric        | Bonsai        | Omikuji<br/>(unbalanced,<br/>cluster.k=100,<br/>max\_depth=3) |
-|-----------------      |------------   |---------      |-------------------------------------------------------------- |
-|  EURLex-4K            | P@1           | 82.8          | 83.0                                                          |
-|                       | P@3           | 69.4          | 69.5                                                          |
-|                       | P@5           | 58.1          | 58.3                                                          |
-|                       | Train Time    | 87s           | 19s                                                           |
-| Amazon-670K           | P@1           | 45.5*         | 45.6                                                          |
-|                       | P@3           | 40.3*         | 40.4                                                          |
-|                       | P@5           | 36.5*         | 36.6                                                          |
-|                       | Train Time    | 5,759s        | 1,753s                                                        |
-|  WikiLSHTC-325K       | P@1           | 66.6*         | 66.6                                                          |
-|                       | P@3           | 44.5*         | 44.4                                                          |
-|                       | P@5           | 33.0*         | 33.0                                                          |
-|                       | Train Time    | 11,156s       | 4,259s                                                        |
-
-*\*Precision numbers as reported in the paper; our machine doesn't have enough memory to run the full prediction with their implementation.*
-
-### Balanced k-means for balanced shallow trees
-
-Sometimes it's desirable to have shallow and wide trees that are also balanced, in which case Omikuji supports the balanced k-means algorithm used by HOMER (Tsoumakas et al., 2008) for clustering as well.
-
-| Dataset               | Metric        | Omikuji<br/>(balanced,<br/>cluster.k=100)     |
-|-----------------      |------------   |------------------------------------------     |
-|  EURLex-4K            | P@1           | 82.1                                          |
-|                       | P@3           | 69.4                                          |
-|                       | P@5           | 58.1                                          |
-|                       | Train Time    | 19s                                           |
-| Amazon-670K           | P@1           | 45.4                                          |
-|                       | P@3           | 40.3                                          |
-|                       | P@5           | 36.5                                          |
-|                       | Train Time    | 1,153s                                        |
-|  WikiLSHTC-325K       | P@1           | 65.6                                          |
-|                       | P@3           | 43.6                                          |
-|                       | P@5           | 32.5                                          |
-|                       | Train Time    | 3,028s                                        |
-
-### Layer collapsing for balanced shallow trees
-
-An alternative way for building balanced, shallow and wide trees is to collapse adjacent layers, similar to the tree compression step used in AttentionXML (You et al., 2019): intermediate layers are removed, and their children replace them as the children of their parents. For example, with balanced 2-means clustering, if we collapse 5 layers after each layer, we can increase the tree arity from 2 to 2⁵⁺¹ = 64.
-
-| Dataset               | Metric        | Omikuji<br/>(balanced,<br/>cluster.k=2,<br/>collapse 5 layers)        |
-|-----------------      |------------   |---------------------------------------------------------------        |
-|  EURLex-4K            | P@1           | 82.4                                                                  |
-|                       | P@3           | 69.3                                                                  |
-|                       | P@5           | 58.0                                                                  |
-|                       | Train Time    | 16s                                                                   |
-| Amazon-670K           | P@1           | 45.3                                                                  |
-|                       | P@3           | 40.2                                                                  |
-|                       | P@5           | 36.4                                                                  |
-|                       | Train Time    | 460s                                                                  |
-|  WikiLSHTC-325K       | P@1           | 64.9                                                                  |
-|                       | P@3           | 43.3                                                                  |
-|                       | P@5           | 32.3                                                                  |
-|                       | Train Time    | 1,649s                                                                |
-
 
 # Usage
 
@@ -186,6 +104,14 @@ On a Linux system, the result is the following:
 ### Datatypes
 It's important to remember to maintain the `np.float32` datatype for the features and `np.uint32` for the labels.
 Mispecification of these types results in a `TypeError`. This is because we employ very efficient memory mapping for sharing the memory between the Python numpy arrays and the underlying Rust context.
+
+
+# Hyperparameters tuning
+The main hyperparameters of the `OmikujiEstimator` are three.
+- `n_trees`
+- `max_depth`
+- `linear_c`
+
 
 ## References
 - Y. Prabhu, A. Kag, S. Harsola, R. Agrawal, and M. Varma, “Parabel: Partitioned Label Trees for Extreme Classification with Application to Dynamic Search Advertising,” in Proceedings of the 2018 World Wide Web Conference, 2018, pp. 993–1002.

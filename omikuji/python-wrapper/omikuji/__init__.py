@@ -2,6 +2,7 @@ __version__ = "0.5.2"
 __all__ = ["Model", "LossType"]
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.sparse import csr_matrix
 from ._libomikuji import lib, ffi
 from enum import Enum
@@ -182,23 +183,32 @@ class Model:
     @classmethod
     def train_on_features_labels(
         cls,
-        features: csr_matrix,
-        labels: csr_matrix,
+        features: ArrayLike | csr_matrix,
+        labels: ArrayLike | csr_matrix,
         hyper_param=None,
         n_threads: Optional[int] = None,
     ):
+        if hasattr(features, "__array__"):
+            features = csr_matrix(features)
+        if hasattr(labels, "__array__"):
+            labels = csr_matrix(labels)
+        return Model.train_on_sparse_features_sparse_labels(features, labels, hyper_param,n_threads)
+    
+    @staticmethod
+    def train_on_sparse_features_sparse_labels(features: csr_matrix, labels: csr_matrix,hyper_param=None, n_threads: Optional[int]=None):
         num_features = features.shape[1]
         num_labels = labels.shape[1]
         num_feature_rows = features.shape[0]
         num_labels_rows = labels.shape[0]
-        assert num_feature_rows == num_labels_rows
+        if num_feature_rows != num_labels_rows:
+            raise ValueError("Number of rows between features and labels is different")
         thread_pool = _ThreadPoolHandle(n_threads)
 
         # Check if it is needed to cast data
-        if features.dtype is not np.float32:
+        if features.dtype != np.float32:
             features = csr_matrix(features, dtype=np.float32)
 
-        if labels.dtype is not np.uint32:
+        if labels.dtype != np.uint32:
             labels = csr_matrix(labels, dtype=np.uint32)
 
         num_nnz_features = features.nnz
