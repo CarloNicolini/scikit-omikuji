@@ -8,6 +8,12 @@ Omikuji is an efficient implementation of **PARABEL** (Partitioned Label Trees) 
 The underlying model code is written in Rust🦀 and its original version is offered by [Tom Tung](https://github.com/tomtung/omikuji).
 
 
+# Installation
+Create a conda environment based on Python >= 3.10.
+
+>>> pip install cython
+>>> pip install -r requirements.txt
+
 # Usage
 
 The following script ([`tests/test-skomikuji.py`](tests/test-skomikuji.py)) demonstrates how to use the `scikit-omikuji` to train a model and make predictions on a fake dataset generated with `scikit-learn`.

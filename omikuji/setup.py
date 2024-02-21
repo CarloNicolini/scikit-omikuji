@@ -3,7 +3,6 @@ import os
 from os import path
 import sys
 
-
 # https://stackoverflow.com/a/65622116 ¯\_(ツ)_/¯
 if sys.platform in ["win32", "cygwin"]:
     os.environ["DISTUTILS_USE_SDK"] = "1"
