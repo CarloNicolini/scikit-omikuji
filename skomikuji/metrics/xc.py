@@ -54,7 +54,7 @@ def precision_at_k(
             X=y_pred, true_labels=y_true, inv_psp=propensity_array, k=k, sorted=sorted
         )[-1]
     elif propensity_array is None:
-        return precision(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1]
+        return float(precision(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1])
     else:
         raise ValueError("Unsupported propensity array type")
 
@@ -96,11 +96,11 @@ def recall_at_k(
             labels=y_true, A=propensity_coeff[0], B=propensity_coeff[1]
         )
     if isinstance(propensity_array, np.ndarray):
-        return psrecall(
+        return float(psrecall(
             X=y_pred, true_labels=y_true, inv_psp=propensity_array, k=k, sorted=sorted
-        )[-1]
+        )[-1])
     elif propensity_array is None:
-        return recall(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1]
+        return float(recall(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1])
     else:
         raise ValueError("Unsupported propensity array type")
 
@@ -142,11 +142,11 @@ def ndcg_at_k(
             labels=y_true, A=propensity_coeff[0], B=propensity_coeff[1]
         )
     if isinstance(propensity_array, np.ndarray):
-        return psndcg(
+        return float(psndcg(
             X=y_pred, true_labels=y_true, inv_psp=propensity_array, k=k, sorted=sorted
-        )[-1]
+        )[-1])
     elif propensity_array is None:
-        return ndcg(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1]
+        return float(ndcg(X=y_pred, true_labels=y_true, k=k, sorted=sorted)[-1])
     else:
         raise ValueError("Unsupported propensity array type")
 

@@ -6,7 +6,7 @@ from typing import Optional
 import numpy as np
 import omikuji as omi
 from numpy.typing import ArrayLike
-from scipy.sparse import csr_array
+from scipy.sparse import csr_array, csr_matrix
 from sklearn.base import BaseEstimator
 from sklearn.datasets import dump_svmlight_file
 
@@ -24,13 +24,12 @@ class OmikujiEstimator(BaseEstimator):
     Parameters
     ----------
     Parabel has 4 hyperparameters:
-        (a) the number of trees (T );
-        (b) the maximum number of paths that can be traversed in a tree (P); 
-        (c) the maximum number of labels in a leaf node (M);
+        (a) the number of trees (T)
+        (b) the maximum number of paths that can be traversed in a tree (P)
+        (c) the maximum number of labels in a leaf node (M)
         (d) the misclassification penalty for all the internal and leaf node classifiers (C)
-        .
-        The default parameter settings of M = 100, P = 10 and C = 10 (C = 1) for log loss (squared hinge loss) were used in all the experiments to eliminate hyperparameter sweeps (though tuning could have increased Parabel's accuracy).
 
+        The default parameter settings of M = 100, P = 10 and C = 10 (C = 1) for log loss (squared hinge loss) were used in all the experiments to eliminate hyperparameter sweeps (though tuning could have increased Parabel's accuracy).
     """
 
     def __init__(
@@ -50,8 +49,61 @@ class OmikujiEstimator(BaseEstimator):
         cluster_balanced: bool = False,
         cluster_eps: float = 0.0001,
         cluster_min_size: int = 2,
-        n_jobs: Optional[int] = None
+        n_jobs: Optional[int] = None,
     ) -> None:
+        """
+        Initializes the Omikuji estimator
+
+
+        Parameters
+        ----------
+
+        centroid_threshold: float
+        Threshold for pruning label centroid vectors. Default 0
+
+        cluster_eps: float
+          Epsilon value for determining linear classifier convergence. Default 0.0001
+
+        cluster_k: int
+          Number of clusters. Default 2
+
+        cluster_min_size: int
+          Labels in clusters with sizes smaller than this threshold are reassigned to other clusters instead. Default 2
+
+        cluster_unbalanced: bool
+          Perform regular k-means clustering instead of balanced k-means clustering. Default False
+
+        collapse_every_n_layers: int
+          Number of adjacent layers to collapse. This increases tree arity and decreases tree depth. Default 0
+
+
+        linear_c: float
+          Cost coefficient for regularizing linear classifiers. Default 1
+
+        linear_eps
+          Epsilon value for determining linear classifier convergence. Default 0.1
+
+        linear_loss: Literal["hinge", "log"
+          Loss function used by linear classifiers. Default hinge
+
+        linear_max_iter: int
+          Max number of iterations for training each linear classifier. Default 20
+
+        linear_weight_threshold: float
+          Threshold for pruning weight vectors of linear classifiers. Default 0.1
+
+        max_depth: int
+          Maximum tree depth. Default 20
+
+        min_branch_size: int
+          Number of labels below which no further clustering & branching is done. Default 100
+
+        n_jobs: Optional[int
+          Number of worker threads If 0 or None, the number is selected automatically.. Default None
+
+        n_trees: int
+          Number of trees. Default 3
+        """
         self.top_k = top_k
         self.beam_size = beam_size
         self.n_trees = n_trees
@@ -72,7 +124,7 @@ class OmikujiEstimator(BaseEstimator):
     @staticmethod
     def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param, n_jobs=None):
         """
-        Temporarily dump the arrays to disk in XC repo format and load them 
+        Temporarily dump the arrays to disk in XC repo format and load them
         using the Rust function train_on_data
         Parameters
         ----------
@@ -86,27 +138,41 @@ class OmikujiEstimator(BaseEstimator):
                 f"{X.shape[0]} {X.shape[1]} {Y.shape[1]}\n",
             )
             return omi.Model.train_on_data(tmp_file.name, hyper_param, n_threads=n_jobs)
-        
+
     @staticmethod
-    def _train_omikuji_from_X_Y_sparse_arrays(X: csr_array, Y: csr_array, hyper_param=None, n_jobs=None):
+    def _train_omikuji_from_X_Y_sparse_arrays(
+        X: csr_array, Y: csr_array, hyper_param=None, n_jobs=None
+    ):
         """
         Pass the sparse arrays directly to underlying Rust implementation
         Parameters
         ----------
         """
-        return omi.Model.train_on_features_labels(features=X, labels=Y, hyper_param=hyper_param, n_threads=n_jobs)
+        return omi.Model.train_on_features_labels(
+            features=X, labels=Y, hyper_param=hyper_param, n_threads=n_jobs
+        )
 
-    def validate_features(self, X: ArrayLike | csr_array):
-        assert isinstance(X, (np.ndarray,csr_array)),"Only ndarray or csr_array accepted"
+    def validate_features(self, X: ArrayLike | csr_array | csr_matrix):
+        if not isinstance(X, (np.ndarray, csr_array, csr_matrix)):
+            raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
+        if X.dtype != np.float32:
+            raise TypeError(
+                "Only sparse features matrices in float32 dtype are accepted"
+            )
         S = X.sum(axis=1) != 0
-        assert S.all(), "Some examples have no nonzero features"
+        if not S.all():
+            raise ValueError("Some examples have no nonzero features")
 
-    def validate_labels(self, Y: ArrayLike | csr_array):
-        assert isinstance(
-            Y, (np.ndarray, csr_array)
-        ), "Only ndarray or csr_array accepted"
+    def validate_labels(self, Y: ArrayLike | csr_array | csr_matrix):
+        if not isinstance(Y, (np.ndarray, csr_array, csr_matrix)):
+            raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
+        if Y.dtype != np.uint32:
+            raise TypeError(
+                "Only sparse label matrices in np.uint32 dtype are accepted"
+            )
         S = Y.sum(axis=1) != 0
-        assert S.all(), "Some examples have no label"
+        if not S.all():
+            raise ValueError("Some examples have no label")
 
     def fit(
         self, X: ArrayLike | csr_array, Y: ArrayLike | csr_array, **fit_params
@@ -142,24 +208,21 @@ class OmikujiEstimator(BaseEstimator):
         hyper_param.cluster_balanced = self.cluster_balanced
         hyper_param.cluster_eps = self.cluster_eps
         hyper_param.cluster_min_size = self.cluster_min_size
-        
+
         self.num_labels_ = Y.shape[1]
-        if isinstance(X, (np.ndarray, csr_array)) and isinstance(
-            Y, (np.ndarray, csr_array)
-        ):
-            self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_sparse_arrays(
-                X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
-            )
+        self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_sparse_arrays(
+            X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
+        )
         return self
 
-    def predict_proba(self, X: ArrayLike | csr_array) -> csr_array:
+    def predict_proba(self, X: ArrayLike | csr_array | csr_matrix) -> np.ndarray:
         """
         Predict new values one by one.
         Unfortunately this is the way to call omikuji, sample by sample
         """
         self.validate_features(X)
         num_samples = X.shape[0]
-        if isinstance(X, csr_array):
+        if isinstance(X, (csr_array, csr_matrix)):
             # we still deal with generators instead of instantiating things
             feature_value_pairs = (zip(x.indices, x.data) for x in X)
         elif isinstance(X, np.ndarray):

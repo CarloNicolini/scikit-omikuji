@@ -1,17 +1,19 @@
-import numpy as np
-from typing import Dict
+from typing import Dict, Optional
+
+from numpy.typing import ArrayLike
+from scipy.sparse import spmatrix
 from scipy.special import softmax
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
     hamming_loss,
     jaccard_score,
+    log_loss,
     precision_score,
     recall_score,
     zero_one_loss,
-    log_loss,
 )
-from sklearn.metrics import ndcg_score
+
 from skomikuji.metrics.xc import (
     ndcg_at_k,
     precision_at_k,
@@ -20,16 +22,20 @@ from skomikuji.metrics.xc import (
 
 
 def compute_metrics(
-    y_true, y_pred, y_score=None, sample_weight=None, **kwargs
+    y_true: ArrayLike | spmatrix,
+    y_pred: ArrayLike | spmatrix,
+    y_score: Optional[ArrayLike] = None,
+    sample_weight: Optional[ArrayLike] = None,
+    **kwargs,
 ) -> Dict[str, float]:
     """
     Computes the metrics for the model evaluation.
 
     Parameters
     ----------
-    y_true: pd.DataFrame
+    y_true: np.ndarray, csr_matrix, pd.DataFrame
         The true labels.
-    y_pred: pd.DataFrame
+    y_pred: np.ndarray, csr_matrix, pd.DataFrame
         The predicted labels.
 
     Returns
@@ -106,12 +112,12 @@ def compute_metrics(
     }
 
     if y_score is not None:
-        from scipy.special import softmax
-        
+        if isinstance(y_score, spmatrix):
+            y_score = y_score.todense()
         if "k" in kwargs:
             K = kwargs["k"]
             propensity_coeff = kwargs.get("propensity_coeff", None)
-            for k in range(1,K+1):
+            for k in range(1, K + 1):
                 all_metrics[f"ncdg@{k}"] = ndcg_at_k(y_true=y_true, y_pred=y_score, k=k)
                 all_metrics[f"ncdg@{k}"] = ndcg_at_k(y_true=y_true, y_pred=y_score, k=k)
                 all_metrics[f"precision@{k}"] = precision_at_k(
@@ -120,7 +126,12 @@ def compute_metrics(
                 all_metrics[f"recall@{k}"] = recall_at_k(
                     y_true=y_true, y_pred=y_score, k=k
                 )
-                all_metrics[f"f1@{k}"] = 2*all_metrics[f"recall@{k}"]*all_metrics[f"precision@{k}"]/(all_metrics[f"recall@{k}"]+all_metrics[f"precision@{k}"])
+                all_metrics[f"f1@{k}"] = (
+                    2
+                    * all_metrics[f"recall@{k}"]
+                    * all_metrics[f"precision@{k}"]
+                    / (all_metrics[f"recall@{k}"] + all_metrics[f"precision@{k}"])
+                )
                 # when propensity coefficients also the propensity-scored metrics are computed
                 if propensity_coeff is not None:
                     all_metrics[f"psncdg@{k}"] = ndcg_at_k(
@@ -141,12 +152,23 @@ def compute_metrics(
                         k=k,
                         propensity_coeff=propensity_coeff,
                     )
-                    all_metrics[f"psf1@{k}"] = 2*all_metrics[f"psrecall@{k}"]*all_metrics[f"psprecision@{k}"]/(all_metrics[f"psrecall@{k}"]+all_metrics[f"psprecision@{k}"])
-                    
+                    all_metrics[f"psf1@{k}"] = (
+                        2
+                        * all_metrics[f"psrecall@{k}"]
+                        * all_metrics[f"psprecision@{k}"]
+                        / (
+                            all_metrics[f"psrecall@{k}"]
+                            + all_metrics[f"psprecision@{k}"]
+                        )
+                    )
+                # to avoid problems with conversions from float32
 
-    all_metrics["log_loss"] = log_loss(
-        y_true=y_true, y_pred=softmax(y_score,axis=1), sample_weight=sample_weight,
-    )
+    if y_score is not None:
+        all_metrics["log_loss"] = log_loss(
+            y_true=y_true,
+            y_pred=softmax(y_score, axis=1),
+            sample_weight=sample_weight,
+        )
     all_metrics["support"] = len(y_pred)
-
+    
     return all_metrics
