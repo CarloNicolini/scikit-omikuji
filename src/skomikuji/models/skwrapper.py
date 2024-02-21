@@ -1,4 +1,3 @@
-import contextlib
 import logging
 from tempfile import NamedTemporaryFile
 from typing import Optional

@@ -1,0 +1,1 @@
+from skomikuji.models.skwrapper import OmikujiEstimator
