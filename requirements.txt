@@ -6,7 +6,7 @@ scikit-learn
 pandas
 scipy
 tabulate
-
+git+https://github.com/kunaldahiya/pyxclib.git
 -e ./omikuji
 # local package
 -e .

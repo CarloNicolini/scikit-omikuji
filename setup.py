@@ -1,6 +1,5 @@
 from setuptools import find_packages, setup
 from os import path
-import sys
 
 def load_readme():
     curr_dir = path.abspath(path.dirname(__file__))
@@ -14,5 +13,6 @@ setup(
     description='A Python wrapper supporting sparse input matrices for multilabel classification in extreme settings.',
     author='Carlo Nicolini',
     author_email="c.nicolini@ipazia.com",
+    install_requires=["cython","numba","numpy","scikit-learn"],
     license='MIT',
 )
