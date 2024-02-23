@@ -23,6 +23,7 @@ slices = [
     "Y_test_proba_pred",
 ]
 
+
 def filter_no_labels(data):
     rows_ok_train = data["Y_train"].sum(1) > 0
     rows_ok_test = data["Y_test"].sum(1) > 0
@@ -31,7 +32,6 @@ def filter_no_labels(data):
         "Y_train": data.pop("Y_train")[rows_ok_train],
         "Y_train_pred": data.pop("Y_train_pred")[rows_ok_train],
         "Y_train_proba_pred": data.pop("Y_train_proba_pred")[rows_ok_train],
-
         "X_test": data.pop("X_test")[rows_ok_test],
         "Y_test": data.pop("Y_test")[rows_ok_test],
         "Y_test_pred": data.pop("Y_test_pred")[rows_ok_test],
@@ -66,10 +66,8 @@ def evaluate_data(data: Dict[str, pd.DataFrame | sparray | spmatrix | np.ndarray
     return train_results, test_results
 
 
-
 if __name__ == "__main__":
-    
-    data = load_data(Path(sys.argv[1]))    
+    data = load_data(Path(sys.argv[1]))
     estimator = OmikujiClassifier()
     estimator.fit(
         X=data["X_train"].astype(np.float32), Y=data["Y_train"].astype(np.uint32)
@@ -77,14 +75,14 @@ if __name__ == "__main__":
     Y_test_pred_proba = estimator.predict_proba(data["X_test"])
     Y_test_pred = Y_test_pred_proba > 0.5
 
-    print(
-        json.dumps(
+    with open("test_results_omikuji.json", "w") as output:
+        json.dump(
             compute_metrics(
                 y_true=data["Y_test"].astype(int),
                 y_pred=Y_test_pred.astype(int).todense(),
                 y_score=Y_test_pred_proba,
-                k=5
+                k=5,
             ),
+            output,
             indent=2,
         )
-    )
