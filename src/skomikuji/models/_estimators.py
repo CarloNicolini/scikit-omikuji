@@ -32,7 +32,7 @@ class OmikujiClassifier(BaseEstimator):
 
     def __init__(
         self,
-        top_k: int = 3,
+        top_k: int = 5,
         beam_size: int = 10,
         n_trees: int = 3,
         min_branch_size: int = 100,
@@ -169,7 +169,7 @@ class OmikujiClassifier(BaseEstimator):
         if not S.all():
             raise ValueError("Some examples have no nonzero features")
 
-    def validate_labels(self, Y: ArrayLike | csr_array | csr_array):
+    def validate_labels(self, Y: ArrayLike | csr_array | csr_array, check_no_labels: bool=False):
         """
         Check that the labels are in the right format and data type.
         Also checks for samples with no label and raises ValueError.
@@ -181,9 +181,10 @@ class OmikujiClassifier(BaseEstimator):
             raise TypeError(
                 "Only sparse label matrices in np.uint32 dtype are accepted"
             )
-        S = Y.sum(axis=1) != 0
-        if not S.all():
-            raise ValueError("Some examples have no label")
+        if check_no_labels:
+            S = Y.sum(axis=1) != 0
+            if not S.all():
+                raise ValueError("Some examples have no label")
 
     def fit(
         self,

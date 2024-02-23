@@ -187,6 +187,7 @@ class Model:
         labels: ArrayLike | csr_matrix,
         hyper_param=None,
         n_threads: Optional[int] = None,
+        densify_weights: float=0.05
     ):
         if hasattr(features, "__array__"):
             features = csr_matrix(features)
@@ -194,8 +195,14 @@ class Model:
             labels = csr_matrix(labels)
         return Model.train_on_sparse_features_sparse_labels(features, labels, hyper_param,n_threads)
     
-    @staticmethod
-    def train_on_sparse_features_sparse_labels(features: csr_matrix, labels: csr_matrix,hyper_param=None, n_threads: Optional[int]=None):
+    @classmethod
+    def train_on_sparse_features_sparse_labels(
+        cls,
+        features: csr_matrix,
+        labels: csr_matrix,
+        hyper_param=None,
+        n_threads: Optional[int] = None,
+    ):
         num_features = features.shape[1]
         num_labels = labels.shape[1]
         num_feature_rows = features.shape[0]
@@ -213,18 +220,6 @@ class Model:
 
         num_nnz_features = features.nnz
         num_nnz_labels = labels.nnz
-        # print("======== FEATURES =========")
-        # print("indices=",features.indices)
-        # print("indptr=",features.indptr)
-        # print("data=",features.data)
-        # print("==== FEATURE PAIR ====")
-        # print(extract_pairs(features.indices, features.indptr, features.data))
-        # print("======== LABELS =========")
-        # print("indices=",labels.indices)
-        # print("indptr=",labels.indptr)
-        # print("data=",labels.data)
-        # print("==== LABELS PAIR ====")
-        # print(extract_pairs(features.indices, features.indptr, features.data))
 
         # Creates and map the rust feature vectors from the numpy arrays
         feature_indices = ffi.new("uint32_t[]", num_nnz_features)
@@ -256,6 +251,7 @@ class Model:
             label_data,
             thread_pool.ptr,
         )
+
         if dataset_ptr == ffi.NULL:
             raise RuntimeError("Failed to pass data to Rust")
         dataset_ptr = ffi.gc(dataset_ptr, lib.free_omikuji_data_set)
