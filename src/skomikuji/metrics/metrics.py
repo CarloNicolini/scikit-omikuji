@@ -1,7 +1,7 @@
 from typing import Dict, Optional
-
+import numpy as np
 from numpy.typing import ArrayLike
-from scipy.sparse import spmatrix
+from scipy.sparse import sparray
 from scipy.special import softmax
 from sklearn.metrics import (
     accuracy_score,
@@ -20,10 +20,24 @@ from skomikuji.metrics.xc import (
     recall_at_k,
 )
 
+def validate_shapes(y_true, y_pred):
+    if y_pred is not None:
+        if y_true.shape != y_pred.shape:
+            raise ValueError("Incompatbile shapes between arrays")
+    
+def validate_types(y_true, y_score, y_pred):
+    if y_true.dtype != np.int64:
+        raise ValueError("Convert y_true array to int")
+    if y_pred.dtype != np.int64 and y_pred.dtype != bool:
+        raise ValueError("Convert y_pred array to int")
+    if y_score is not None:
+        if y_score.dtype != np.float64:
+            raise ValueError("Convert y_score array to float")
+
 
 def compute_metrics(
-    y_true: ArrayLike | spmatrix,
-    y_pred: ArrayLike | spmatrix,
+    y_true: ArrayLike | sparray,
+    y_pred: ArrayLike | sparray,
     y_score: Optional[ArrayLike] = None,
     sample_weight: Optional[ArrayLike] = None,
     **kwargs,
@@ -33,16 +47,25 @@ def compute_metrics(
 
     Parameters
     ----------
-    y_true: np.ndarray, csr_matrix, pd.DataFrame
+    y_true: np.ndarray, scipy.sparse sparse array, pd.DataFrame
         The true labels.
     y_pred: np.ndarray, csr_matrix, pd.DataFrame
         The predicted labels.
+    y_score: np.ndarary, sparse array, pd.DataFrame
+        The predicted scores as from the method .predict_proba
 
     Returns
     -------
     Dict
         A dictionary containing the metrics.
     """
+
+    validate_shapes(y_true, y_pred)
+    validate_shapes(y_true, y_score)
+    validate_shapes(y_pred, y_score)
+
+    #validate_types(y_true, y_pred, y_score)
+
     all_metrics = {
         "precision_weighted": precision_score(
             y_true=y_true,
@@ -112,7 +135,7 @@ def compute_metrics(
     }
 
     if y_score is not None:
-        if isinstance(y_score, spmatrix):
+        if isinstance(y_score, sparray):
             y_score = y_score.todense()
         if "k" in kwargs:
             K = kwargs["k"]
@@ -161,7 +184,6 @@ def compute_metrics(
                             + all_metrics[f"psprecision@{k}"]
                         )
                     )
-                # to avoid problems with conversions from float32
 
     if y_score is not None:
         all_metrics["log_loss"] = log_loss(

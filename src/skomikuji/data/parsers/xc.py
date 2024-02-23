@@ -64,5 +64,6 @@ def read_xc_repo_file(path: Path):
             x, y = parse_xc_repo_data_line(line=line, n_features=num_features)
             X.append(csr_array(x))
             Y.append(y)
-
-    return X,Y
+    if (num_samples != X.shape[0]) or (num_samples != Y.shape[1]):
+        raise ValueError("Incompatible shape between indicated number of rows and effective data")
+    return X, Y
