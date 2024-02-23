@@ -57,6 +57,9 @@ class OmikujiClassifier(BaseEstimator):
         Parameters
         ----------
 
+        top_k: int
+            How many labels to return in prediction. Default 5.
+
         centroid_threshold: float
         Threshold for pruning label centroid vectors. Default 0
 
@@ -74,7 +77,6 @@ class OmikujiClassifier(BaseEstimator):
 
         collapse_every_n_layers: int
           Number of adjacent layers to collapse. This increases tree arity and decreases tree depth. Default 0
-
 
         linear_c: float
           Cost coefficient for regularizing linear classifiers. Default 1
