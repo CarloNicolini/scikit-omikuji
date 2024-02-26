@@ -191,6 +191,6 @@ def compute_metrics(
             y_pred=softmax(y_score, axis=1),
             sample_weight=sample_weight,
         )
-    all_metrics["support"] = len(y_pred)
+    all_metrics["support"] = y_pred.shape[0]
     
     return all_metrics

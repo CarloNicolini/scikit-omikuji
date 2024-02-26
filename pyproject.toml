@@ -1,11 +1,17 @@
+[build-system]
+requires = ["poetry-core>=1.0.0", "cython", "numpy"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "skomikuji"
-version = "0.2.0"
+version = "0.3.0"
 description = "A Python wrapper supporting sparse input matrices for multilabel classification in extreme settings."
 authors = ["Carlo Nicolini <c.nicolini@ipazia.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+Click = "*"
+colorama = "*"
 cython = "*"
 scikit-learn = "*"
 pandas = "*"
@@ -14,9 +20,21 @@ tabulate = "*"
 omikuji = { path = "./omikuji" }
 xclib = { git = "https://github.com/kunaldahiya/pyxclib.git" }
 
-[tool.poetry.dev-dependencies]
+[tool.dev-dependencies]
 pytest = "*"
+jupyterlab = "*"
+matplotlib = "*"
 
-[build-system]
-requires = ["poetry-core>=1.0.0", "cython", "numpy"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff]
+# max line length for black
+line-length = 88
+target-version = "py38"
+exclude=[
+    ".git",
+    "__pycache__",
+    "dist",
+]
+
+
+[tool.poetry.scripts]
+skomikuji-cli = 'skomikuji.cli:main'

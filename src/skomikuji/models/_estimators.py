@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.sparse import csr_array, sparray
+from scipy.sparse import csr_array, sparray, csr_matrix
 from sklearn.base import BaseEstimator
 from sklearn.datasets import dump_svmlight_file
 
@@ -157,19 +157,20 @@ class OmikujiClassifier(BaseEstimator):
             features=X, labels=Y, hyper_param=hyper_param, n_threads=n_jobs
         )
 
-    def validate_features(self, X: ArrayLike | csr_array | csr_array):
+    def validate_features(self, X: ArrayLike | csr_matrix | csr_array, check_zero_features:bool=False):
         """
         Check that the features are in the right format and data type
         """
-        if not isinstance(X, (np.ndarray, sparray)):
-            raise TypeError("Only ndarray or csr_array or csr_array accepted")
+        if not isinstance(X, (np.ndarray, csr_array, csr_matrix)):
+            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
         if X.dtype != np.float32:
             raise TypeError(
                 "Only sparse features matrices in float32 dtype are accepted"
             )
-        S = X.sum(axis=1) != 0
-        if not S.all():
-            raise ValueError("Some examples have no nonzero features")
+        if check_zero_features:
+            S = X.sum(axis=1) != 0
+            if not S.all():
+                raise ValueError("Some examples have no nonzero features")
 
     def validate_labels(self, Y: ArrayLike | csr_array | csr_array, check_no_labels: bool=False):
         """
@@ -177,8 +178,8 @@ class OmikujiClassifier(BaseEstimator):
         Also checks for samples with no label and raises ValueError.
         User has to discard them.
         """
-        if not isinstance(Y, (np.ndarray, csr_array, csr_array)):
-            raise TypeError("Only ndarray or csr_array or csr_array accepted")
+        if not isinstance(Y, (np.ndarray, sparray)):
+            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
         if Y.dtype != np.uint32:
             raise TypeError(
                 "Only sparse label matrices in np.uint32 dtype are accepted"
@@ -244,7 +245,7 @@ class OmikujiClassifier(BaseEstimator):
         """
         self.validate_features(X)
         num_samples = X.shape[0]
-        if isinstance(X, (csr_array, csr_array)):
+        if isinstance(X, (csr_matrix, csr_array)):
             # we still deal with generators instead of instantiating things
             feature_value_pairs = sparse_to_feature_value_pairs(X)
         elif isinstance(X, np.ndarray):
@@ -277,7 +278,7 @@ class OmikujiClassifier(BaseEstimator):
 
         Parameters:
         -----------
-        X: np.ndarray, csr_array, csr_array
+        X: np.ndarray, csr_matrix, csr_array
             The features matrix (dense or sparse)
         """
         return (self.predict_proba(X) > proba_threshold).astype(int)
