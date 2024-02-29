@@ -7,7 +7,7 @@ import pandas as pd
 import json
 import rich
 from tabulate import tabulate
-from skomikuji.metrics import pr
+from skomikuji.metrics import psprecision_at_k_scorer, compute_metrics
 from skomikuji import OmikujiClassifier
 from sklearn.model_selection import GridSearchCV,  KFold
 
