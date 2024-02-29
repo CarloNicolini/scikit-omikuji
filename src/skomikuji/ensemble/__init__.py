@@ -1,0 +1,1 @@
+from ._omikuji import OmikujiClassifier
