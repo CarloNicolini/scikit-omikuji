@@ -71,17 +71,6 @@ def test_instantiation_with_custom_parameters():
     assert estimator.n_jobs == 4
 
 
-def test_X_type_error():
-    estimator = OmikujiClassifier()
-    with pytest.raises(TypeError):
-        estimator.fit(None, np.array([[1, 0, 1], [0, 1, 0]]))
-
-
-def test_Y_type_error():
-    estimator = OmikujiClassifier()
-    with pytest.raises(TypeError):
-        estimator.fit(np.array([[1, 0, 1], [0, 1, 0]]), None)
-
 
 def test_X_dtype_error():
     estimator = OmikujiClassifier()

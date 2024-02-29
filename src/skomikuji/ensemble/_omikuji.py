@@ -6,12 +6,13 @@ from numpy.typing import ArrayLike
 from scipy.sparse import csr_array, sparray, csr_matrix
 from sklearn.base import BaseEstimator
 from sklearn.datasets import dump_svmlight_file
-
+from sklearn.utils.validation import check_array
 import omikuji as omi
 from skomikuji.sparse import sparse_to_feature_value_pairs
 from skomikuji.data.parsers.svmlight import line_prepender
 
-LossMap = {"hinge":0 ,"log" : 1}
+LossMap = {"hinge": 0, "log": 1}
+
 
 class OmikujiClassifier(BaseEstimator):
     """
@@ -47,7 +48,7 @@ class OmikujiClassifier(BaseEstimator):
         cluster_balanced: bool = False,
         cluster_eps: float = 0.0001,
         cluster_min_size: int = 2,
-        loss_type: Literal["hinge","log"] = "hinge",
+        loss_type: Literal["hinge", "log"] = "hinge",
         n_jobs: Optional[int] = None,
         check_no_labels: bool = False,
     ) -> None:
@@ -130,7 +131,6 @@ class OmikujiClassifier(BaseEstimator):
         self.n_jobs = n_jobs
         self.check_no_labels = check_no_labels
 
-
     @staticmethod
     def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param, n_jobs=None):
         """
@@ -168,40 +168,34 @@ class OmikujiClassifier(BaseEstimator):
         """
         Check that the features are in the right format and data type
         """
-        if not isinstance(X, (np.ndarray, csr_array, csr_matrix)):
-            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
-        if X.dtype != np.float32:
-            raise TypeError(
-                "Only sparse features matrices in float32 dtype are accepted"
-            )
+        X = check_array(
+            X, accept_sparse=True, accept_large_sparse=True, ensure_2d=True, dtype=np.float32
+        )
         if check_zero_features:
             S = X.sum(axis=1) != 0
             if not S.all():
                 raise ValueError("Some examples have no nonzero features")
 
     def validate_labels(
-        self, Y: ArrayLike | csr_array | csr_array, check_no_labels: bool = False
+        self, y: ArrayLike | csr_array | csr_array, check_no_labels: bool = False
     ):
         """
         Check that the labels are in the right format and data type.
         Also checks for samples with no label and raises ValueError.
         User has to discard them.
         """
-        if not isinstance(Y, (np.ndarray, sparray)):
-            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
-        if Y.dtype != np.uint32:
-            raise TypeError(
-                "Only sparse label matrices in np.uint32 dtype are accepted"
-            )
+        y = check_array(
+            y, accept_sparse=True, accept_large_sparse=True, ensure_2d=True, dtype=np.uint32
+        )
         if check_no_labels:
-            S = Y.sum(axis=1) != 0
+            S = y.sum(axis=1) != 0
             if not S.all():
                 raise ValueError("Some examples have no label")
 
     def fit(
         self,
         X: ArrayLike | csr_array | csr_array,
-        Y: ArrayLike | csr_array | csr_array,
+        y: ArrayLike | csr_array | csr_array,
         **fit_params,
     ) -> "OmikujiClassifier":
         """
@@ -219,7 +213,7 @@ class OmikujiClassifier(BaseEstimator):
         OmikujiEstimator instance
         """
         self.validate_features(X)
-        self.validate_labels(Y, check_no_labels=self.check_no_labels)
+        self.validate_labels(y, check_no_labels=self.check_no_labels)
 
         hyper_param = omi.Model.default_hyper_param()
         # applies the hyperparameters
@@ -238,14 +232,14 @@ class OmikujiClassifier(BaseEstimator):
         hyper_param.cluster_min_size = self.cluster_min_size
         hyper_param.linear_loss_type = LossMap[self.loss_type]
 
-        self.num_labels_ = Y.shape[1]
+        self.num_labels_ = y.shape[1]
         if fit_params.get("serialize", False):
             self.model_ = OmikujiClassifier._train_omikuji_from_X_Y_dense_arrays(
-                X=X, Y=Y, hyper_param=hyper_param, n_jobs=self.n_jobs
+                X=X, Y=y, hyper_param=hyper_param, n_jobs=self.n_jobs
             )
         else:
             self.model_ = OmikujiClassifier._train_omikuji_from_X_Y_sparse_arrays(
-                X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
+                X, y, hyper_param=hyper_param, n_jobs=self.n_jobs
             )
         return self
 

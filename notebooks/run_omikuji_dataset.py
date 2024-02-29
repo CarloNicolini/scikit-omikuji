@@ -70,7 +70,7 @@ if __name__ == "__main__":
     data = load_data(Path(sys.argv[1]))
     estimator = OmikujiClassifier()
     estimator.fit(
-        X=data["X_train"].astype(np.float32), Y=data["Y_train"].astype(np.uint32)
+        X=data["X_train"].astype(np.float32), y=data["Y_train"].astype(np.uint32)
     )
     Y_test_pred_proba = estimator.predict_proba(data["X_test"])
     Y_test_pred = Y_test_pred_proba > 0.5

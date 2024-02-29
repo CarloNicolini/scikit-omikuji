@@ -21,10 +21,11 @@ The following script ([`tests/test-skomikuji.py`](tests/test-skomikuji.py)) demo
 ```python
 import numpy as np
 import json
-from skomikuji.models.skwrapper import OmikujiEstimator
+from skomikuji import OmikujiClassifier
 from skomikuji.metrics import compute_metrics
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_array
 from sklearn.datasets import make_multilabel_classification
+import rich
 
 num_rows, num_features, num_labels = 100, 10, 5
 np.random.seed(42)
@@ -61,22 +62,15 @@ X_test = Y_test.astype(np.float32)
 Y_test = Y_test.astype(np.uint32)
 
 ### We now fit the Omikuji estimator on data
-model = OmikujiEstimator(top_k=10)
+model = OmikujiClassifier(top_k=10)
 model = model.fit(X_train, Y_train)
 
 ### We get the class prediction probabilities and the predicted labels using 0.5 as the threshold
-Y_proba_test_pred = model.predict_proba(X_test).todense()
+Y_proba_test_pred = model.predict_proba(X_test)
 Y_test_pred = Y_proba_test_pred > 0.5
 
 # We compute some metrics, up to the precision@2 (precision@1 and precision@2 are reported)
-print(
-    json.dumps(
-        compute_metrics(
-            y_true=Y_test, y_pred=Y_test_pred, y_score=Y_proba_test_pred, k=2
-        ),
-        indent=4,
-    )
-)
+rich.print_json(data=compute_metrics(y_true=Y_test, y_pred=Y_test_pred, y_score=Y_proba_test_pred, k=2))
 ```
 
 On a Linux system, the result is the following:
