@@ -1,1 +1,1 @@
-from skomikuji.models import OmikujiClassifier
+from skomikuji.ensemble import OmikujiClassifier
