@@ -1,17 +1,17 @@
 from typing import Union, Tuple
 
-from numba import njit
+import numba as nb
 import numpy as np
 import scipy.sparse as sp
 from scipy.sparse import csr_array, csr_matrix
-from xclib.utils.sparse import topk
+
 
 SparseLike = Union[csr_array, csr_matrix]
 ArrayLike = np.typing.ArrayLike
 SparseOrDenseLike = Union[SparseLike, ArrayLike]
 
 
-@njit(parallel=True)
+@nb.njit(parallel=True)
 def _topk_nb(
     data: SparseLike,
     indices: np.ndarray,

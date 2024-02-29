@@ -4,5 +4,4 @@ scipy
 scikit-learn
 pandas
 tabulate
-xclib @ git+https://github.com/kunaldahiya/pyxclib.git@2ee12f87447fb181bb44e2181e6b99aec939fade
 omikuji @ git+ssh://git@corporate-gitlab.gigroup.local/data-driven-engineering/scikit-omikuji.git@0e312b1d1aeb408e38f5ec8ea30653a60a64fd1b#egg=omikuji&subdirectory=omikuji

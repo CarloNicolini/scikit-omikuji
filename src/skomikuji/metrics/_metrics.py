@@ -78,6 +78,42 @@ def precision_at_k(
         raise ValueError("Unsupported propensity array type")
 
 
+def f1_at_k(
+    y_true: np.ndarray | sp.csr_matrix | sp.csr_array,
+    y_pred: np.ndarray | sp.csr_matrix | sp.csr_array,
+    k: int = 1,
+    propensity_array: Optional[np.ndarray] = None,
+    propensity_coeff: Optional[Tuple[float, float]] = None,
+    sort_values: bool = False,
+) -> float:
+    """
+    Returns the f1@k.
+
+    Parameters
+    ----------
+    y_true: np.ndarray, sp.csr_matrix, dict
+        The 2D array of ground truth labels.
+    y_pred: sp.csr_matrix, np.ndarray or dict
+        The 2D array of labels relevance as found by the classifier .predict_proba
+        * sp.csr_matrix: sp.csr_matrix with nnz at relevant places
+        * np.ndarray (float): scores for each label
+            User must ensure shape is fine
+        * np.ndarray (int): top indices (in sort_values order)
+            User must ensure shape is fine
+        * {'indices': np.ndarray, 'scores': np.ndarray}
+    k: int
+        The number of indices to return.
+    propensity_array:
+        An array with the inverse propensity scores
+    propensity_coeff:
+        A tuple with two elements representing the propensity coefficients
+    sort_values:
+        whether to s
+    """
+    p = precision_at_k(y_true,y_pred,k,propensity_array,propensity_coeff,sort_values)
+    r = recall_at_k(y_true,y_pred,k,propensity_array,propensity_coeff,sort_values)
+    return 2*p*r/(p+r)
+
 def recall_at_k(
     y_true: np.ndarray | sp.csr_matrix | sp.csr_array,
     y_pred: np.ndarray | sp.csr_matrix | sp.csr_array,
