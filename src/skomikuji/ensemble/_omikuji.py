@@ -1,20 +1,19 @@
-import logging
 from tempfile import NamedTemporaryFile
-from typing import Optional
-
+from typing import Optional, Literal
+from pathlib import Path
 import numpy as np
-import omikuji as omi
 from numpy.typing import ArrayLike
-from scipy.sparse import csr_array, csr_matrix
+from scipy.sparse import csr_array, sparray, csr_matrix
 from sklearn.base import BaseEstimator
 from sklearn.datasets import dump_svmlight_file
 
+import omikuji as omi
+from skomikuji.sparse import sparse_to_feature_value_pairs
 from skomikuji.data.parsers.svmlight import line_prepender
 
-logger = logging.getLogger()
+LossMap = {"hinge":0 ,"log" : 1}
 
-
-class OmikujiEstimator(BaseEstimator):
+class OmikujiClassifier(BaseEstimator):
     """
     Efficient Rust implementation of Parabel algorithm
     http://manikvarma.org/pubs/prabhu18b.pdf
@@ -33,7 +32,7 @@ class OmikujiEstimator(BaseEstimator):
 
     def __init__(
         self,
-        top_k: int = 3,
+        top_k: int = 5,
         beam_size: int = 10,
         n_trees: int = 3,
         min_branch_size: int = 100,
@@ -48,7 +47,9 @@ class OmikujiEstimator(BaseEstimator):
         cluster_balanced: bool = False,
         cluster_eps: float = 0.0001,
         cluster_min_size: int = 2,
+        loss_type: Literal["hinge","log"] = "hinge",
         n_jobs: Optional[int] = None,
+        check_no_labels: bool = False,
     ) -> None:
         """
         Initializes the Omikuji estimator
@@ -56,6 +57,9 @@ class OmikujiEstimator(BaseEstimator):
 
         Parameters
         ----------
+
+        top_k: int
+            How many labels to return in prediction. Default 5.
 
         centroid_threshold: float
         Threshold for pruning label centroid vectors. Default 0
@@ -74,7 +78,6 @@ class OmikujiEstimator(BaseEstimator):
 
         collapse_every_n_layers: int
           Number of adjacent layers to collapse. This increases tree arity and decreases tree depth. Default 0
-
 
         linear_c: float
           Cost coefficient for regularizing linear classifiers. Default 1
@@ -97,11 +100,16 @@ class OmikujiEstimator(BaseEstimator):
         min_branch_size: int
           Number of labels below which no further clustering & branching is done. Default 100
 
+        loss_type: int, Hinge, Log
+            Loss function to use in liblinear. 0 for Hinge, 1 for Log
         n_jobs: Optional[int
           Number of worker threads If 0 or None, the number is selected automatically.. Default None
 
         n_trees: int
           Number of trees. Default 3
+
+        check_no_labels: bool
+            Check in fit method if some samples have no labels
         """
         self.top_k = top_k
         self.beam_size = beam_size
@@ -118,7 +126,10 @@ class OmikujiEstimator(BaseEstimator):
         self.cluster_balanced = cluster_balanced
         self.cluster_eps = cluster_eps
         self.cluster_min_size = cluster_min_size
+        self.loss_type = loss_type
         self.n_jobs = n_jobs
+        self.check_no_labels = check_no_labels
+
 
     @staticmethod
     def _train_omikuji_from_X_Y_dense_arrays(X, Y, hyper_param, n_jobs=None):
@@ -151,46 +162,55 @@ class OmikujiEstimator(BaseEstimator):
             features=X, labels=Y, hyper_param=hyper_param, n_threads=n_jobs
         )
 
-    def validate_features(self, X: ArrayLike | csr_array | csr_matrix):
+    def validate_features(
+        self, X: ArrayLike | csr_matrix | csr_array, check_zero_features: bool = False
+    ):
         """
         Check that the features are in the right format and data type
         """
         if not isinstance(X, (np.ndarray, csr_array, csr_matrix)):
-            raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
+            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
         if X.dtype != np.float32:
             raise TypeError(
                 "Only sparse features matrices in float32 dtype are accepted"
             )
-        S = X.sum(axis=1) != 0
-        if not S.all():
-            raise ValueError("Some examples have no nonzero features")
+        if check_zero_features:
+            S = X.sum(axis=1) != 0
+            if not S.all():
+                raise ValueError("Some examples have no nonzero features")
 
-    def validate_labels(self, Y: ArrayLike | csr_array | csr_matrix):
+    def validate_labels(
+        self, Y: ArrayLike | csr_array | csr_array, check_no_labels: bool = False
+    ):
         """
         Check that the labels are in the right format and data type.
         Also checks for samples with no label and raises ValueError.
         User has to discard them.
         """
-        if not isinstance(Y, (np.ndarray, csr_array, csr_matrix)):
-            raise TypeError("Only ndarray or csr_array or csr_matrix accepted")
+        if not isinstance(Y, (np.ndarray, sparray)):
+            raise TypeError("Only ndarray or csr_matrix or csr_array accepted")
         if Y.dtype != np.uint32:
             raise TypeError(
                 "Only sparse label matrices in np.uint32 dtype are accepted"
             )
-        S = Y.sum(axis=1) != 0
-        if not S.all():
-            raise ValueError("Some examples have no label")
+        if check_no_labels:
+            S = Y.sum(axis=1) != 0
+            if not S.all():
+                raise ValueError("Some examples have no label")
 
     def fit(
-        self, X: ArrayLike | csr_array, Y: ArrayLike | csr_array, **fit_params
-    ) -> "OmikujiEstimator":
+        self,
+        X: ArrayLike | csr_array | csr_array,
+        Y: ArrayLike | csr_array | csr_array,
+        **fit_params,
+    ) -> "OmikujiClassifier":
         """
         Parameters
         ----------
-        X: ArrayLike | csr_array
+        X: ArrayLike | csr_array | csr_array
             Either a dense or a sparse compressed row array with features.
             It has num_samples x num_features shape.
-        Y: ArrayLike | csr_array
+        Y: ArrayLike | csr_array | csr_array
             Either a dense 0/1 or a sparse compressed row array with labels
             It has num_samples x num_labels shape.
 
@@ -199,7 +219,8 @@ class OmikujiEstimator(BaseEstimator):
         OmikujiEstimator instance
         """
         self.validate_features(X)
-        self.validate_labels(Y)
+        self.validate_labels(Y, check_no_labels=self.check_no_labels)
+
         hyper_param = omi.Model.default_hyper_param()
         # applies the hyperparameters
         hyper_param.n_trees = self.n_trees
@@ -215,23 +236,29 @@ class OmikujiEstimator(BaseEstimator):
         hyper_param.cluster_balanced = self.cluster_balanced
         hyper_param.cluster_eps = self.cluster_eps
         hyper_param.cluster_min_size = self.cluster_min_size
+        hyper_param.linear_loss_type = LossMap[self.loss_type]
 
         self.num_labels_ = Y.shape[1]
-        self.model_ = OmikujiEstimator._train_omikuji_from_X_Y_sparse_arrays(
-            X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
-        )
+        if fit_params.get("serialize", False):
+            self.model_ = OmikujiClassifier._train_omikuji_from_X_Y_dense_arrays(
+                X=X, Y=Y, hyper_param=hyper_param, n_jobs=self.n_jobs
+            )
+        else:
+            self.model_ = OmikujiClassifier._train_omikuji_from_X_Y_sparse_arrays(
+                X, Y, hyper_param=hyper_param, n_jobs=self.n_jobs
+            )
         return self
 
-    def predict_proba(self, X: ArrayLike | csr_array | csr_matrix) -> np.ndarray:
+    def predict_proba(self, X: ArrayLike | csr_array | csr_array) -> csr_array:
         """
         Predict new values one by one.
         Unfortunately this is the way to call omikuji, sample by sample
         """
         self.validate_features(X)
         num_samples = X.shape[0]
-        if isinstance(X, (csr_array, csr_matrix)):
+        if isinstance(X, (csr_matrix, csr_array)):
             # we still deal with generators instead of instantiating things
-            feature_value_pairs = (zip(x.indices, x.data) for x in X)
+            feature_value_pairs = sparse_to_feature_value_pairs(X)
         elif isinstance(X, np.ndarray):
             feature_value_pairs = (
                 ((i, v) for i, v in zip(np.where(X[0, :])[0], x[x != 0])) for x in X
@@ -240,6 +267,7 @@ class OmikujiEstimator(BaseEstimator):
         row_indices, col_indices, values = [], [], []
         for index, sample_feat_value_pairs in enumerate(feature_value_pairs):
             # TODO check the proba of scores
+            # TODO measure the predict speed using generators over csr_array
             y_pred = self.model_.predict(
                 sample_feat_value_pairs, beam_size=self.beam_size, top_k=self.top_k
             )
@@ -256,4 +284,12 @@ class OmikujiEstimator(BaseEstimator):
     def predict(
         self, X: ArrayLike | csr_array, proba_threshold: float = 0.5
     ) -> csr_array:
-        return (self.predict_proba(X) > 0.5).astype(int)
+        """
+        Predict the labels having a probability larger than the threshold
+
+        Parameters:
+        -----------
+        X: np.ndarray, csr_matrix, csr_array
+            The features matrix (dense or sparse)
+        """
+        return (self.predict_proba(X) > proba_threshold).astype(int)
