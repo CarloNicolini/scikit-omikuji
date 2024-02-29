@@ -11,8 +11,8 @@ The underlying model code is written in Rust🦀 and its original version is off
 # Installation
 Create a conda environment based on Python >= 3.10.
 
->>> pip install cython
->>> pip install -r requirements.txt
+>>> pip install -e .
+
 
 # Usage
 
