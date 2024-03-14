@@ -1,4 +1,5 @@
 import click
+import joblib
 from typing import Optional, List
 from pathlib import Path
 import numpy as np
@@ -44,18 +45,13 @@ def cli():
     pass
 
 
-@click.group(name="predict")
-def predict():
-    pass
-
-
 @click.command()
 @click.option("-i", "--input-path", type=click.Path(exists=True), required=True)
 @click.option("-k", type=click.INT, required=False, default=1)
 @click.option("-a", "--propensity_a", type=float, required=False, default=0.65)
 @click.option("-b", "--propensity_b", type=float, required=False, default=2.8)
 @click.option("-p", "--print_result", type=bool, required=False, default=True)
-def predict_from_path(
+def predict(
     input_path: Path, k: int = 1, propensity_a=0.65, propensity_b=2.8, print_result=True
 ):
     return _predict_from_path(input_path, k, propensity_a, propensity_b, print_result)
@@ -102,7 +98,7 @@ def _predict_from_path(
 @click.option("-b", "--propensity_b", type=float, required=False, default=2.8)
 @click.option("-g", "--grid-search", type=bool, required=False)
 @click.option("-c", "--config_file", type=click.Path(exists=True), required=False)
-def train_from_path(
+def train(
     input_path: Path,
     k: int = 1,
     propensity_a=0.65,
@@ -156,8 +152,9 @@ def train_from_path(
     )
 
     model.fit(data["X_train"], data["Y_train"])
-    if grid_search:
-        print_dictionary(model.best_params_)
+    
+    print_dictionary(model.get_params())
+    pd.Series(model.get_params()).to_json(Path(input_path)/"omikuji_params.json")
     data["Y_test_proba_pred"] = model.predict_proba(data["X_test"])
     data["Y_test_pred"] = (data["Y_test_proba_pred"] > 0.5).astype(np.uint32)
 
@@ -173,17 +170,15 @@ def train_from_path(
         _predict_from_path(
             input_path, k, propensity_a, propensity_b, print_result=False
         )
-    ).rename("Baseline")
+    ).rename("XGBoost")
     omikuji_metrics = pd.Series(metrics).rename("Omikuji")
 
     comparison = pd.concat([base_metrics, omikuji_metrics], axis=1)
-    comparison.reset_index().to_csv(Path(input_path) / "test_results_comparison.csv")
+    comparison.reset_index().to_csv(Path(input_path) / "test_results_omikuji.csv",index=False)
     print(tabulate(comparison, headers="keys", tablefmt="pretty", floatfmt=".3f"))
 
-
+cli.add_command(train)
 cli.add_command(predict)
-predict.add_command(train_from_path)
-predict.add_command(predict_from_path)
 
 
 def main():
