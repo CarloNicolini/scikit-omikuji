@@ -118,3 +118,9 @@ The main hyperparameters of the `OmikujiEstimator` are three.
 - S. Khandagale, H. Xiao, and R. Babbar, “Bonsai - Diverse and Shallow Trees for Extreme Multi-label Classification,” Apr. 2019.
 - G. Tsoumakas, I. Katakis, and I. Vlahavas, “Effective and efficient multilabel classification in domains with large number of labels,” ECML, 2008.
 - R. You, S. Dai, Z. Zhang, H. Mamitsuka, and S. Zhu, “AttentionXML: Extreme Multi-Label Text Classification with Multi-Label Attention Based Recurrent Neural Networks,” Jun. 2019.
+
+## Documentation
+
+To build and serve the documentation locally:
+
+1. Install the required dependencies:
