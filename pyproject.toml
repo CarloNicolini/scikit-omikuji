@@ -9,7 +9,7 @@ description = "A Python wrapper supporting sparse input matrices for multilabel 
 authors = ["Carlo Nicolini <c.nicolini@ipazia.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 Click = "*"
 rich = "*"
 tabulate = "*"
@@ -20,17 +20,17 @@ pyarrow = "*"
 scipy = "*"
 PyYaml = "*"
 omikuji = { path = "./omikuji" }
-sphinx = "^7.1.2"
-sphinx-autobuild = "^2021.3.14"
-pydata-sphinx-theme = "^0.14.1"
-sphinx-autodoc-typehints=="^2.4.4"
-myst-parser = "^2.0.0"
 
 
 [tool.dev-dependencies]
 pytest = "*"
 jupyterlab = "*"
 matplotlib = "*"
+sphinx = "^7.1.2"
+sphinx-autobuild = "^2021.3.14"
+pydata-sphinx-theme = "^0.14.1"
+sphinx-autodoc-typehints = "^2.4.4"
+myst-parser = "^2.0.0"
 
 [tool.ruff]
 # max line length for black
