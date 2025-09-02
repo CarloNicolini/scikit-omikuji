@@ -1,16 +1,18 @@
-import click
-import joblib
-from typing import Optional, List
-from pathlib import Path
-import numpy as np
-from scipy.sparse import csr_array
-import pandas as pd
 import json
+from pathlib import Path
+from typing import Annotated, Optional
+
+import joblib
+import numpy as np
+import pandas as pd
 import rich
+import typer
+from scipy.sparse import csr_array
+from sklearn.model_selection import GridSearchCV, KFold
 from tabulate import tabulate
-from skomikuji.metrics import psprecision_at_k_scorer, compute_metrics
+
 from skomikuji import OmikujiClassifier
-from sklearn.model_selection import GridSearchCV,  KFold
+from skomikuji.metrics import compute_metrics, psprecision_at_k_scorer
 
 
 def print_dictionary(dictionary):
@@ -19,10 +21,24 @@ def print_dictionary(dictionary):
 
 
 def load_parquets(
-    input_path: str | Path, folds_list: List[str], to_sparse: bool = False
+    input_path: str | Path, folds_list: list[str], to_sparse: bool = False
 ):
     """
-    Load the given list of parquet files
+    Load the given list of parquet files.
+
+    Parameters
+    ----------
+    input_path : str | Path
+        Path to the directory containing parquet files
+    folds_list : list[str]
+        List of parquet file names (without extension) to load
+    to_sparse : bool, default=False
+        Whether to convert loaded data to sparse format
+
+    Returns
+    -------
+    dict
+        Dictionary containing loaded data with fold names as keys
     """
     data = {}
     for fold in folds_list:
@@ -38,40 +54,80 @@ def load_parquets(
     return data
 
 
-@click.group(
-    name="cli", help="Base command line interface for the smartscreening python package"
+# Create the main Typer app
+app = typer.Typer(
+    name="skomikuji-cli",
+    help="Command line interface for the scikit-omikuji package - multilabel classification in extreme settings.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
 )
-def cli():
-    pass
 
 
-@click.command()
-@click.option("-i", "--input-path", type=click.Path(exists=True), required=True)
-@click.option("-k", type=click.INT, required=False, default=1)
-@click.option("-a", "--propensity_a", type=float, required=False, default=0.65)
-@click.option("-b", "--propensity_b", type=float, required=False, default=2.8)
-@click.option("-p", "--print_result", type=bool, required=False, default=True)
 def predict(
-    input_path: Path, k: int = 1, propensity_a=0.65, propensity_b=2.8, print_result=True
+    input_path: Annotated[
+        Path,
+        typer.Option(
+            "-i",
+            "--input-path",
+            help="Path to directory containing prediction data",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+        ),
+    ],
+    k: Annotated[
+        int,
+        typer.Option("-k", help="Number of top predictions to consider for metrics"),
+    ] = 1,
+    propensity_a: Annotated[
+        float, typer.Option("-a", "--propensity-a", help="Propensity score parameter A")
+    ] = 0.65,
+    propensity_b: Annotated[
+        float, typer.Option("-b", "--propensity-b", help="Propensity score parameter B")
+    ] = 2.8,
+    print_result: Annotated[
+        bool,
+        typer.Option(
+            "-p", "--print-result", help="Whether to print results to console"
+        ),
+    ] = True,
 ):
+    """
+    Compute model prediction metrics from saved test data.
+
+    This command loads test predictions and computes various multilabel classification metrics
+    including precision, recall, F1-score, and propensity-scored metrics.
+    """
     return _predict_from_path(input_path, k, propensity_a, propensity_b, print_result)
 
 
 def _predict_from_path(
     input_path: Path,
     k: int = 1,
-    propensity_a=0.65,
-    propensity_b=2.8,
-    print_result=False,
+    propensity_a: float = 0.65,
+    propensity_b: float = 2.8,
+    print_result: bool = False,
 ):
     """
-    Compute the model predictions metrics
+    Compute model prediction metrics from saved test data.
 
     Parameters
     ----------
+    input_path : Path
+        Path to directory containing parquet files with test data
+    k : int, default=1
+        Number of top predictions to consider for metrics
+    propensity_a : float, default=0.65
+        Propensity score parameter A
+    propensity_b : float, default=2.8
+        Propensity score parameter B
+    print_result : bool, default=False
+        Whether to print results to console
 
-    path: Path
-        The path to extract
+    Returns
+    -------
+    dict
+        Dictionary containing computed metrics
     """
     data = load_parquets(
         input_path=input_path,
@@ -91,24 +147,57 @@ def _predict_from_path(
     return metrics
 
 
-@click.command()
-@click.option("-i", "--input-path", type=click.Path(exists=True), required=True)
-@click.option("-k", type=click.INT, required=False, default=1)
-@click.option("-a", "--propensity_a", type=float, required=False, default=0.65)
-@click.option("-b", "--propensity_b", type=float, required=False, default=2.8)
-@click.option("-g", "--grid-search", type=bool, required=False)
-@click.option("-c", "--config_file", type=click.Path(exists=True), required=False)
 def train(
-    input_path: Path,
-    k: int = 1,
-    propensity_a=0.65,
-    propensity_b=2.8,
-    grid_search: bool=False,
-    config_file: Optional[Path] = None,
+    input_path: Annotated[
+        Path,
+        typer.Option(
+            "-i",
+            "--input-path",
+            help="Path to directory containing training data",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+        ),
+    ],
+    k: Annotated[
+        int,
+        typer.Option("-k", help="Number of top predictions to consider for metrics"),
+    ] = 1,
+    propensity_a: Annotated[
+        float, typer.Option("-a", "--propensity-a", help="Propensity score parameter A")
+    ] = 0.65,
+    propensity_b: Annotated[
+        float, typer.Option("-b", "--propensity-b", help="Propensity score parameter B")
+    ] = 2.8,
+    grid_search: Annotated[
+        bool,
+        typer.Option(
+            "-g", "--grid-search", help="Enable grid search for hyperparameter tuning"
+        ),
+    ] = False,
+    config_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "-c",
+            "--config-file",
+            help="Path to configuration file (YAML or JSON)",
+            exists=True,
+        ),
+    ] = None,
 ):
+    """
+    Train an Omikuji classifier on the provided dataset.
+
+    This command trains a multilabel classifier using the Omikuji algorithm, with optional
+    grid search for hyperparameter optimization. Training data should be provided as
+    parquet files containing features (X_train, X_test) and labels (Y_train, Y_test).
+
+    The trained model will be evaluated against test data and compared with baseline metrics
+    if available. Results are saved to the input directory.
+    """
     model = OmikujiClassifier()
-    params={}
-    if isinstance(config_file, (str,Path)):
+    params = {}
+    if isinstance(config_file, (str, Path)):
         config_file = Path(config_file)
         if config_file.exists() and config_file.suffix == ".yaml":
             try:
@@ -120,6 +209,7 @@ def train(
             params = safe_load(open(config_file, "r"))
         elif config_file.exists() and config_file.suffix == ".json":
             import json
+
             params = json.loads(config_file.read_text())
         else:
             raise FileNotFoundError(
@@ -127,7 +217,7 @@ def train(
             )
     if grid_search:
         print_dictionary(params["grid_search"])
-        
+
         model = GridSearchCV(
             estimator=OmikujiClassifier(n_jobs=1),
             param_grid=params["grid_search"]["param_grid"],
@@ -152,9 +242,9 @@ def train(
     )
 
     model.fit(data["X_train"], data["Y_train"])
-    
+
     print_dictionary(model.get_params())
-    pd.Series(model.get_params()).to_json(Path(input_path)/"omikuji_params.json")
+    pd.Series(model.get_params()).to_json(Path(input_path) / "omikuji_params.json")
     data["Y_test_proba_pred"] = model.predict_proba(data["X_test"])
     data["Y_test_pred"] = (data["Y_test_proba_pred"] > 0.5).astype(np.uint32)
 
@@ -174,15 +264,20 @@ def train(
     omikuji_metrics = pd.Series(metrics).rename("Omikuji")
 
     comparison = pd.concat([base_metrics, omikuji_metrics], axis=1)
-    comparison.reset_index().to_csv(Path(input_path) / "test_results_omikuji.csv",index=False)
+    comparison.reset_index().to_csv(
+        Path(input_path) / "test_results_omikuji.csv", index=False
+    )
     print(tabulate(comparison, headers="keys", tablefmt="pretty", floatfmt=".3f"))
 
-cli.add_command(train)
-cli.add_command(predict)
+
+# Register commands with the app
+app.command()(predict)
+app.command()(train)
 
 
 def main():
-    cli()
+    """Main entry point for the CLI application."""
+    app()
 
 
 if __name__ == "__main__":

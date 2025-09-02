@@ -186,20 +186,6 @@ The main classifier class with scikit-learn compatible interface.
 - **`predict_proba(X)`**: Predict class probabilities
 - **`predict(X, proba_threshold=0.5)`**: Predict binary labels
 
-## 🖥️ Command Line Interface
-
-### Training a Model
-
-```bash
-skomikuji train -i /path/to/training/data -k 5 -c config.yaml
-```
-
-### Making Predictions
-
-```bash
-skomikuji predict -i /path/to/test/data -k 5
-```
-
 ### Grid Search
 
 ```bash
