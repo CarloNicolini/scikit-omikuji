@@ -151,9 +151,13 @@ impl DataSet {
             label_sets,
         })
     }
-//feature_lists: Vec<IndexValueVec>
-    pub fn from_x_y(n_features: usize, n_labels: usize, feature_lists: Vec<IndexValueVec>, label_sets: Vec<IndexSet>) -> Result<Self> 
-    {
+    //feature_lists: Vec<IndexValueVec>
+    pub fn from_x_y(
+        n_features: usize,
+        n_labels: usize,
+        feature_lists: Vec<IndexValueVec>,
+        label_sets: Vec<IndexSet>,
+    ) -> Result<Self> {
         info!("Total number of features {}", n_features);
         info!("Total number of labels {}", n_labels);
         info!("Num rows {}", feature_lists.len());

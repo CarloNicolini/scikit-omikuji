@@ -189,7 +189,7 @@ The main classifier class with scikit-learn compatible interface.
 ### Grid Search
 
 ```bash
-skomikuji train -i /path/to/data -g --config_file config.yaml
+skomikuji-cli train -i /path/to/data -g --config_file config.yaml
 ```
 
 ## ⚙️ Configuration

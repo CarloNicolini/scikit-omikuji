@@ -1,2 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# environment variables
+.env
+
+# Virtual environments
 .venv
-target/
+.qodo
+
+# OS related stuff
+.DS_Store
+
+notebooks
+experiments
