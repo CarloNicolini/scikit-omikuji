@@ -1,0 +1,100 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  python-quality:
+    name: Python Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        
+    - name: Install dependencies
+      run: |
+        uv venv --python 3.12
+        source .venv/bin/activate
+        uv pip install ruff mypy black isort
+        
+    - name: Run Ruff linter
+      run: |
+        source .venv/bin/activate
+        ruff check src/ tests/ --output-format=github
+        
+    - name: Check code formatting with Black
+      run: |
+        source .venv/bin/activate
+        black --check src/ tests/
+        
+    - name: Check import sorting with isort
+      run: |
+        source .venv/bin/activate
+        isort --check-only src/ tests/
+        
+    - name: Run MyPy type checking
+      run: |
+        source .venv/bin/activate
+        # Install package first for mypy to work properly
+        uv pip install -e .
+        mypy src/ --ignore-missing-imports || true
+
+  rust-quality:
+    name: Rust Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+        components: rustfmt, clippy
+        
+    - name: Cache Rust dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          omikuji/target/
+          omikuji/c-api/target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+          
+    - name: Check Rust formatting
+      working-directory: omikuji
+      run: cargo fmt --all -- --check
+      
+    - name: Run Clippy
+      working-directory: omikuji
+      run: cargo clippy --all-targets --all-features -- -D warnings
+      
+    - name: Check C API formatting
+      working-directory: omikuji/c-api
+      run: cargo fmt --all -- --check
+      
+    - name: Run C API Clippy
+      working-directory: omikuji/c-api
+      run: cargo clippy --all-targets -- -D warnings
