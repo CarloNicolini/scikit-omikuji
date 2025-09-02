@@ -9,7 +9,6 @@ version = "0.3.1"
 requires-python = ">=3.10"
 description = "A Python wrapper supporting sparse input matrices for multilabel classification in extreme settings."
 authors = [{ name = "Carlo Nicolini", email = "c.nicolini@ipazia.com" }]
-
 dependencies = [
     "typer",
     "rich",
@@ -23,11 +22,14 @@ dependencies = [
     "omikuji",
 ]
 
-[tool.scripts]
-skomikuji-cli = "skomikuji.cli:main"
+[project.scripts]
+skomikuji-cli = "skomikuji.cli:app"
 
 [tool.uv.sources]
 omikuji = { path = "./omikuji" }
+
+[tool.uv]
+package = true
 
 [dependency-groups]
 dev = [
