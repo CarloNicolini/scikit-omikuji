@@ -82,7 +82,7 @@ jobs:
     - name: Activate virtual environment and install dependencies
       run: |
         source .venv/bin/activate
-        uv pip install -e ".[dev]"
+        uv sync --all-extras
         
     - name: Run pytest
       run: |
@@ -172,7 +172,7 @@ jobs:
       run: |
         uv venv --python 3.12
         source .venv/bin/activate
-        uv pip install -e ".[dev]"
+        uv sync --all-extras
         
     - name: Test package import
       run: |
